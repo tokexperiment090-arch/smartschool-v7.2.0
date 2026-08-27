@@ -171,19 +171,6 @@
     </head>
 	
     <body class="hold-transition skin-blue sidebar-mini">		
-	
- <?php
-if ($this->config->item('SSLK') == "") {
-    ?>
- <div class="topaleart">
-    <div class="slidealert">
-    <div class="alert alert-dismissible topaleart-inside">
-   <p class="palert"><strong>Alert!</strong> You are using unregistered version of Riyo. Please <a  href="#" class="purchasemodal">click here</a> to register your purchase code for Riyo.</p>
-</div></div>
-</div>
-                    <?php
-}
-
 ?>
 
        <div class="wrapper">
