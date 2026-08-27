@@ -538,7 +538,6 @@ if ($this->session->flashdata('success_msg')) {
     </div>
 </div>
 
-<?php $this->load->view('layout/routine_update');?>
 <?php $this->load->view('layout/addon_update');?>
 <?php  if (($this->module_lib->hasModule('multi_branch') && $this->module_lib->hasActive('multi_branch')) || $this->db->multi_branch)  { ?>
 <?php $this->load->view('layout/multi_branch');?>

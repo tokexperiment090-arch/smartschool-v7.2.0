@@ -500,27 +500,8 @@ class Admin extends Admin_Controller
 
         echo json_encode(array('status' => 1, 'message' => $this->lang->line('session_changed_successfully')));
     }
+    public function updatePurchaseCode() { /* removed for standalone build */ }
 
-    public function updatePurchaseCode()
-    {
-        $this->form_validation->set_rules('email', $this->lang->line('email'), 'required|valid_email|trim|xss_clean');
-        $this->form_validation->set_rules('envato_market_purchase_code', $this->lang->line('purchase_code'), 'required|trim|xss_clean');
-        if ($this->form_validation->run() == false) {
-            $data = array(
-                'email'                       => form_error('email'),
-                'envato_market_purchase_code' => form_error('envato_market_purchase_code'),
-            );
-            $array = array('status' => '2', 'error' => $data);
-
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(200)
-                ->set_output(json_encode($array));
-        } else {
-            //==================
-            $response = $this->auth->app_update();
-        }
-    }
 
     public function backup()
     {
