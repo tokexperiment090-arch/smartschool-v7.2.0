@@ -107,7 +107,7 @@
 			                
 			            </ul>  
 						<?php }else{ ?>
-							<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+							<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 						<?php } ?>
                     </div>                   
                 </div>	 
@@ -149,7 +149,7 @@
                     			
                     		</table>
 							<?php }else{  ?>
-								<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+								<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 							<?php } ?>
                     	</div>
                     </div>
@@ -178,7 +178,7 @@
                     		}
                     	}
                     	if($status==0){ ?>
-                    		<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+                    		<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
                     	<?php }
                     	//===========================
 
@@ -234,7 +234,7 @@
 			               
 			            </ul>
 						<?php }else{  ?>
-							<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+							<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 						<?php } ?>
                     </div>
                 </div>
@@ -292,7 +292,7 @@
 			            <?php } } ?>			                
 			            </ul> 
 						<?php }else{ ?>
-							<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+							<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 						<?php } ?>
                     </div>
                 </div>
@@ -352,7 +352,7 @@
 			                <?php } ?>		            		                
 			            </ul> 
 						<?php  }else{ ?>
-							<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+							<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 						<?php } ?>
                     </div>
                 </div>
@@ -385,7 +385,7 @@
 			            </ul>
 						<?php }else{ ?>
 						
-						<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+						<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 						
 						<?php } ?>					
                     </div>                   
@@ -413,7 +413,7 @@
                                 <?php if (empty($bookList)) { ?>
 									<tr>
 										<td colspan="6">
-											<img src="https://smart-school.in/ssappresource/images/addnewitem.svg"  width="150" class="center-block mt20">
+											<img src="<?php echo base_url(); ?>uploads/riyo/addnewitem.svg"  width="150" class="center-block mt20">
 										</td>
 									</tr>
                                 <?php
