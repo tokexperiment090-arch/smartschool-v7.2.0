@@ -64,7 +64,7 @@ if (!is_really_writable(FCPATH . 'temp')) {
 
 <?php
 if ($error == true) {
-    echo '<div class="text-center alert alert-danger">Please fix the requirements to begin Smart School Installation.</div>';
+    echo '<div class="text-center alert alert-danger">Please fix the requirements to begin Riyo Installation.</div>';
 } else {
     
 }

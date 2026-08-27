@@ -8,13 +8,13 @@
             <form action="<?php echo site_url('admin/admin/updatePurchaseCode') ?>" method="POST" id="purchase_code">
                 <div class="modal-body lic_modal-body">
                     <div class="form-group">
-                        <div class="req"><b>Important:</b> Smart School Regular License allows to use Smart School for single school/branch/end/client but for customer convenience registering Smart School allows to register Smart School licence purchase code on upto 3 urls e.g. 1. For localhost 2. For testing environment and 3. For your production url (testing and production url should be on same domain).</div>
+                        <div class="req"><b>Important:</b> Riyo Regular License allows to use Riyo for single school/branch/end/client but for customer convenience registering Riyo allows to register Riyo licence purchase code on upto 3 urls e.g. 1. For localhost 2. For testing environment and 3. For your production url (testing and production url should be on same domain).</div>
                     </div>
                     <div class="error_message">
 
                     </div>
                     <div class="form-group">
-                        <label class="ainline"><span>Envato Market Purchase Code for Smart School ( <a target="_blank" href="https://help.market.envato.com/hc/en-us/articles/202822600-Where-Is-My-Purchase-Code-"> How to find it?</a> )</span></label>
+                        <label class="ainline"><span>Envato Market Purchase Code for Riyo ( <a target="_blank" href="https://help.market.envato.com/hc/en-us/articles/202822600-Where-Is-My-Purchase-Code-"> How to find it?</a> )</span></label>
                         <input type="text" class="form-control" id="input-envato_market_purchase_code" name="envato_market_purchase_code">
                         <div id="error" class="text text-danger"></div>
                     </div>

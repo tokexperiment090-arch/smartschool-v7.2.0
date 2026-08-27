@@ -198,7 +198,7 @@ if ($this->config->item('SSLK') == "") {
     <div class="slidealert">
     <div class="alert alert-dismissible topaleart-inside">
 
-   <p class="palert"><strong>Alert!</strong> You are using unregistered version of Smart School.</p>
+   <p class="palert"><strong>Alert!</strong> You are using unregistered version of Riyo.</p>
 </div></div>
 </div>
                     <?php

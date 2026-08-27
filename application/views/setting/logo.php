@@ -224,7 +224,7 @@
 
                     </div>
                     <div class="form-group">
-                        <label class="ainline"><span><?php echo $this->lang->line('envato_market_purchase_code_for_smart_school_android_app') ?> ( <a target="_blank" href="https://help.market.envato.com/hc/en-us/articles/202822600-Where-Is-My-Purchase-Code-"> <?php echo $this->lang->line('how_to_find_it') ?></a> )</span></label>
+                        <label class="ainline"><span><?php echo $this->lang->line('envato_market_purchase_code_for_riyo_android_app') ?> ( <a target="_blank" href="https://help.market.envato.com/hc/en-us/articles/202822600-Where-Is-My-Purchase-Code-"> <?php echo $this->lang->line('how_to_find_it') ?></a> )</span></label>
                         <input type="text" class="form-control" id="input-app-envato_market_purchase_code" name="app-envato_market_purchase_code">
                         <div id="error" class="input-error text text-danger"></div>
                     </div>
