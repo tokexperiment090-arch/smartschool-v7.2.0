@@ -148,7 +148,10 @@ class Portal extends CI_Controller {
                 $bal = array();
                 foreach ($source_records as $r) {
                     $obj = array();
-                    foreach (json_decode($r['data'], true) ?: array() as $p) { $obj[$p['name']] = $p['value']; }
+                    foreach (json_decode($r['data'], true) ?: array() as $p) {
+                        $k = preg_replace('/^field_/', '', $p['name']);
+                        $obj[$k] = $p['value'];
+                    }
                     foreach (array('account_debit','account_credit') as $k) {
                         if (!empty($obj[$k]) && isset($obj['amount'])) {
                             $acc = $obj[$k];
