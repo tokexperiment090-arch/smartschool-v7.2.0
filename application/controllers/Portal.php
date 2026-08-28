@@ -93,6 +93,9 @@ class Portal extends CI_Controller {
                     $type = 'horizontal';
                     $fields = json_encode(array(
                         array('name'=>'name','label'=>'Name','type'=>'text'),
+                        array('name'=>'code','label'=>'Code','type'=>'text'),
+                        array('name'=>'status','label'=>'Status','type'=>'select','options'=>array('Active','Inactive','Pending')),
+                        array('name'=>'date','label'=>'Date','type'=>'date'),
                         array('name'=>'description','label'=>'Description','type'=>'textarea')));
                 }
                 $this->db->insert('portal_pages', array(
@@ -183,5 +186,28 @@ class Portal extends CI_Controller {
         if (!$this->auth()) { echo json_encode(array('status' => 0)); return; }
         $this->db->delete('portal_records', array('id' => $rid));
         echo json_encode(array('status' => 1));
+    }
+
+    // One-time: enrich generic module field schemas (call /portal/migrate once).
+    public function migrate() {
+        if (!$this->auth()) { redirect('portal'); }
+        $gen = json_encode(array(
+            array('name'=>'name','label'=>'Name','type'=>'text'),
+            array('name'=>'description','label'=>'Description','type'=>'textarea')));
+        $rich = json_encode(array(
+            array('name'=>'name','label'=>'Name','type'=>'text'),
+            array('name'=>'code','label'=>'Code','type'=>'text'),
+            array('name'=>'status','label'=>'Status','type'=>'select','options'=>array('Active','Inactive','Pending')),
+            array('name'=>'date','label'=>'Date','type'=>'date'),
+            array('name'=>'description','label'=>'Description','type'=>'textarea')));
+        $rows = $this->db->get('portal_pages')->result_array();
+        $n = 0;
+        foreach ($rows as $r) {
+            if ($r['fields'] === $gen) {
+                $this->db->where('id', $r['id'])->update('portal_pages', array('fields' => $rich));
+                $n++;
+            }
+        }
+        echo "Updated $n generic modules to richer schema.";
     }
 }
