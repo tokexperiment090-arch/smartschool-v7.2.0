@@ -25,6 +25,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
   |
  */
 $config['base_url'] = 'http://riyo.rf.gd/';
+$config['installed'] = true;
 
 
 /*
@@ -516,4 +517,4 @@ $config['rewrite_short_tags'] = FALSE;
 $config['routine_session'] = 16;
 $config['routine_update'] = 4102444800;
 $config['proxy_ips'] = '';
-$config['installed'] = false;
+$config['installed'] = true;
