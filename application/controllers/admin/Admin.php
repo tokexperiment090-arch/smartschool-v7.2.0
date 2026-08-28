@@ -872,24 +872,12 @@ class Admin extends Admin_Controller
 
     public function updateandappCode()
     {
-        $this->form_validation->set_rules('app-email', 'Email', 'required|valid_email|trim|xss_clean');
-        $this->form_validation->set_rules('app-envato_market_purchase_code', 'Purchase Code', 'required|trim|xss_clean');
-
-        if ($this->form_validation->run() == false) {
-            $data = array(
-                'app-email'                       => form_error('app-email'),
-                'app-envato_market_purchase_code' => form_error('app-envato_market_purchase_code'),
-            );
-            $array = array('status' => '2', 'error' => $data);
-
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(200)
-                ->set_output(json_encode($array));
-        } else {
-            //==================
-            $response = $this->auth->andapp_update();
-        }
+        // Android app purchase-code registration disabled. Always succeed silently.
+        $array = array('status' => 1, 'message' => $this->lang->line('success_message'));
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(200)
+            ->set_output(json_encode($array));
     }
 
     public function filetype()

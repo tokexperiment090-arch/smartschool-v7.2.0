@@ -473,28 +473,8 @@ class Auth
 
     public function andapp_validate()
     {
-        $sslk = $this->CI->config->item('SSLK');
-        $url  = $this->CI->enc_lib->dycrypt(DEBUG_SYSTEM_APP_REG);
-        $ch   = curl_init();
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_POST, true);
-        $data = array(
-            'sslk'     => $sslk,
-            'base_url' => base_url(),
-        );
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-        $output   = curl_exec($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        $json_response = json_decode($output);
-        if ($httpcode == 200) {
-            return true;
-        } else {
-            return false;
-        }
+        // Permanently registered (no Envato purchase-code prompt).
+        return true;
     }
 
     public function addon_update()
