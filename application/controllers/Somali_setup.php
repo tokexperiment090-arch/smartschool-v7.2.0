@@ -58,6 +58,10 @@ class Somali_setup extends CI_Controller
             $out[] = "Somali already enabled in sch_settings.languages.";
         }
 
+        // 3) Set Somali as the default school language so the UI renders Somali
+        $this->db->where('id', 1)->update('sch_settings', array('lang_id' => $somali_id));
+        $out[] = "Set default school language lang_id = $somali_id (Somali).";
+
         echo implode("<br>\n", $out);
         echo "<br>\nDONE. Somali is now registered and enabled. You can remove this controller afterwards.";
     }
