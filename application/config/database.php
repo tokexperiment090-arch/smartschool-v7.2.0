@@ -76,10 +76,10 @@ $query_builder = TRUE;
 
 $db['default'] = array(
     'dsn' => '',
-    'hostname' => 'localhost',
-    'username' => 'root',
-    'password' => '',
-    'database' => 'ssnodb',
+    'hostname' => 'sql112.infinityfree.com',
+    'username' => 'if0_42766119',
+    'password' => 'MQllcM72JA3Wz',
+    'database' => 'if0_42766119_school',
     'dbdriver' => 'mysqli',
     'dbprefix' => '',
     'pconnect' => FALSE,
