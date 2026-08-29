@@ -17,6 +17,11 @@ class Testdata extends CI_Controller
         $this->load->database();
         $out = array();
 
+        // ensure test logins use plaintext passwords (SmartSchool stores users.password in plaintext)
+        $this->db->query("UPDATE users SET password='parent123' WHERE username LIKE 'RYY%'");
+        $this->db->query("UPDATE users SET password='teacher123' WHERE username LIKE 'TCH%'");
+        $this->db->query("UPDATE staff SET password='teacher123' WHERE employee_id LIKE 'TCH%'");
+
         // ---- session ----
         $sess = $this->db->where('is_active','yes')->get('sessions')->row();
         if (!$sess) {
@@ -80,7 +85,7 @@ class Testdata extends CI_Controller
                         'emergency_contact_no'=>'06100000'.$ti,'email'=>strtolower(str_replace(' ','', $nm)).'@riyo.edu',
                         'dob'=>$this->DEFDATE,'marital_status'=>'Single','date_of_joining'=>date('Y-m-d'),
                         'local_address'=>$this->DEF,'permanent_address'=>$this->DEF,'note'=>$this->DEF,'image'=>$this->DEF,
-                        'password'=>password_hash('teacher123', PASSWORD_BCRYPT),'gender'=>'Male',
+                        'password'=>'parent123',
                         'account_title'=>$this->DEF,'bank_account_no'=>$this->DEF,'bank_name'=>$this->DEF,
                         'ifsc_code'=>$this->DEF,'bank_branch'=>$this->DEF,'payscale'=>$this->DEF,'epf_no'=>$this->DEF,
                         'contract_type'=>$this->DEF,'shift'=>$this->DEF,'location'=>$this->DEF,'facebook'=>$this->DEF,
@@ -103,7 +108,7 @@ class Testdata extends CI_Controller
                         else {
                             $staff_id = $chk->id;
                             $this->db->query("INSERT INTO staff_roles (role_id,staff_id,is_active) VALUES (2,$staff_id,1)");
-                            $this->db->query("INSERT INTO users (user_id,username,password,role,lang_id,is_active) VALUES ($staff_id,$emp_esc,'".password_hash('teacher123', PASSWORD_BCRYPT)."','teacher',95,'yes')");
+                            $this->db->query("INSERT INTO users (user_id,username,password,role,lang_id,is_active) VALUES ($staff_id,$emp_esc,'teacher123','teacher',95,'yes')");
                             $out[] = "teacher $emp $nm (id $staff_id)";
                         }
                     }
@@ -143,7 +148,7 @@ class Testdata extends CI_Controller
                         );
                         $this->db->insert('students', $student_data);
                         $stu_id = $this->db->insert_id();
-                        $this->db->insert('users', array('user_id'=>$stu_id,'username'=>$adm,'password'=>password_hash('parent123', PASSWORD_BCRYPT),'role'=>'parent','lang_id'=>95,'is_active'=>'yes'));
+                        $this->db->insert('users', array('user_id'=>$stu_id,'username'=>$adm,'password'=>'parent123','role'=>'parent','lang_id'=>95,'is_active'=>'yes'));
                         $par_id = $this->db->insert_id();
                         $this->db->where('id',$stu_id)->update('students', array('parent_id'=>$par_id));
                         $this->db->insert('student_session', array(
@@ -204,6 +209,8 @@ class Testdata extends CI_Controller
         echo "students(total)=$students  with_session=$with_ss<br>\n";
         echo "staff=$staff  [".implode(', ', $emps)."]<br>\n";
         echo "student_attendences=$att  feemasters=$fm<br>\n";
+        $u = $this->db->query("SELECT username,role FROM users WHERE username LIKE 'RYY%' OR username LIKE 'TCH%' LIMIT 20")->result();
+        echo "test users: ".implode(', ', array_map(function($r){return $r->username.'/'.$r->role;}, $u))."<br>\n";
         echo "Integrity: ".($students==$with_ss ? "OK (all students have a session)" : "GAP (some students missing session!)");
     }
 }
