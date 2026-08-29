@@ -11,11 +11,6 @@ class RiyoApi {
   Future<void> saveToken(String t) => _storage.write(key: ApiConfig.TOKEN_KEY, value: t);
   Future<void> clearToken() => _storage.delete(key: ApiConfig.TOKEN_KEY);
 
-  Map<String, String> _headers([String? tok]) => {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        if (tok != null) 'Authorization': 'Bearer $tok',
-      };
-
   Future<Map<String, dynamic>> _get(String path, String tok) async {
     final r = await http.get(Uri.parse('${ApiConfig.BASE_URL}$path?token=$tok'));
     return _decode(r);
@@ -43,8 +38,14 @@ class RiyoApi {
 
   Future<Map<String, dynamic>> profile() async =>
       _get('/riyo_api/profile', (await token)!);
-  Future<Map<String, dynamic>> attendance() async =>
-      _get('/riyo_api/attendance', (await token)!);
+  Future<Map<String, dynamic>> attendance([String? month]) async {
+    final tok = (await token)!;
+    final url = month != null
+        ? '${ApiConfig.BASE_URL}/riyo_api/attendance?token=$tok&month=$month'
+        : '${ApiConfig.BASE_URL}/riyo_api/attendance?token=$tok';
+    final r = await http.get(Uri.parse(url));
+    return _decode(r);
+  }
   Future<Map<String, dynamic>> fees() async => _get('/riyo_api/fees', (await token)!);
   Future<Map<String, dynamic>> notices() async =>
       _get('/riyo_api/notices', (await token)!);

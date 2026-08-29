@@ -198,44 +198,75 @@ class Riyo_api extends CI_Controller
         if (!$uid) return $this->json(array('status' => 'error', 'message' => 'unauthorized'), 401);
         $s = $this->student_by_user($uid);
         if (!$s) return $this->json(array('status' => 'error', 'message' => 'not found'), 404);
-        $ss = $this->db->get_where('student_session', array('student_id' => $s->id, 'is_active' => 'yes'))->row();
-        if (!$ss) return $this->json(array('status' => 'success', 'exam_groups' => array()));
-        $sid = $ss->id; // student_session id used by exam_group tables
 
-        // exam_group_class_batch_exam_students links a student_session to an exam group exam
-        $this->db->select('egcbse.id as exam_student_id, eg.id as exam_group_id, eg.name as exam_group_name');
-        $this->db->from('exam_group_class_batch_exam_students egcbse');
-        $this->db->join('exam_group_class_batch_exams egcbe', 'egcbe.id = egcbse.exam_group_class_batch_exam_id');
-        $this->db->join('exam_groups eg', 'eg.id = egcbe.exam_group_id');
-        $this->db->where('egcbse.student_session_id', $sid);
-        $this->db->where('egcbe.is_publish', 1);
-        $exams = $this->db->get()->result_array();
+        // All student sessions (current AND old classes) so past exam results show too.
+        $this->db->select('ss.id as ssid, ss.session_id, ses.session as session_name, c.class as class_name, sec.section as section_name');
+        $this->db->from('student_session ss');
+        $this->db->join('sessions ses', 'ses.id = ss.session_id', 'left');
+        $this->db->join('classes c', 'c.id = ss.class_id', 'left');
+        $this->db->join('sections sec', 'sec.id = ss.section_id', 'left');
+        $this->db->where('ss.student_id', $s->id);
+        $this->db->order_by('ss.session_id', 'DESC');
+        $sessions = $this->db->get()->result_array();
 
         $out = array();
-        foreach ($exams as $e) {
-            $this->db->select('egcbes.subject_id, s.name as subject, egcbes.max_marks, r.get_marks, r.attendence, r.note');
-            $this->db->from('exam_group_class_batch_exam_subjects egcbes');
-            $this->db->join('subjects s', 's.id = egcbes.subject_id', 'left');
-            $this->db->join('exam_group_exam_results r', 'r.exam_group_class_batch_exam_subject_id = egcbes.id AND r.exam_group_class_batch_exam_student_id = ' . (int)$e['exam_student_id'], 'left');
-            $this->db->where('egcbes.exam_group_class_batch_exams_id', $e['exam_group_id']);
-            $subjects = $this->db->get()->result_array();
+        foreach ($sessions as $sess) {
+            $sid = $sess['ssid'];
+            // published exam group exams linked to this student_session
+            $this->db->select('egcbse.id as exam_student_id, egcbe.id as egcbe_id, eg.id as exam_group_id, eg.name as exam_group_name');
+            $this->db->from('exam_group_class_batch_exam_students egcbse');
+            $this->db->join('exam_group_class_batch_exams egcbe', 'egcbe.id = egcbse.exam_group_class_batch_exam_id');
+            $this->db->join('exam_groups eg', 'eg.id = egcbe.exam_group_id');
+            $this->db->where('egcbse.student_session_id', $sid);
+            $this->db->where('egcbe.is_publish', 1);
+            $exams = $this->db->get()->result_array();
 
-            $total_max = 0; $total_get = 0; $has_marks = false;
-            foreach ($subjects as &$sub) {
-                $sub['max_marks'] = is_numeric($sub['max_marks']) ? (float)$sub['max_marks'] : null;
-                $sub['get_marks'] = is_numeric($sub['get_marks']) ? (float)$sub['get_marks'] : null;
-                if ($sub['max_marks'] !== null) $total_max += $sub['max_marks'];
-                if ($sub['get_marks'] !== null) { $total_get += $sub['get_marks']; $has_marks = true; }
+            $groups = array();
+            foreach ($exams as $e) {
+                $this->db->select('egcbes.subject_id, s.name as subject, egcbes.max_marks, r.get_marks, r.attendence, r.note');
+                $this->db->from('exam_group_class_batch_exam_subjects egcbes');
+                $this->db->join('subjects s', 's.id = egcbes.subject_id', 'left');
+                $this->db->join('exam_group_exam_results r', 'r.exam_group_class_batch_exam_subject_id = egcbes.id AND r.exam_group_class_batch_exam_student_id = ' . (int)$e['exam_student_id'], 'left');
+                $this->db->where('egcbes.exam_group_class_batch_exams_id', $e['egcbe_id']);
+                $subjects = $this->db->get()->result_array();
+
+                $total_max = 0; $total_get = 0; $has_marks = false;
+                foreach ($subjects as &$sub) {
+                    $sub['max_marks'] = is_numeric($sub['max_marks']) ? (float)$sub['max_marks'] : null;
+                    $sub['get_marks'] = is_numeric($sub['get_marks']) ? (float)$sub['get_marks'] : null;
+                    if ($sub['max_marks'] !== null) $total_max += $sub['max_marks'];
+                    if ($sub['get_marks'] !== null) { $total_get += $sub['get_marks']; $has_marks = true; }
+                }
+                $pct = ($has_marks && $total_max > 0) ? round($total_get / $total_max * 100, 1) : null;
+                $groups[] = array(
+                    'exam_group' => $e['exam_group_name'],
+                    'subjects' => $subjects,
+                    'total_max' => $total_max,
+                    'total_get' => $has_marks ? $total_get : null,
+                    'percentage' => $pct === null ? null : (string)$pct, // clean "80.4"
+                    'grade' => $pct === null ? null : $this->grade_for($pct),
+                );
             }
-            $out[] = array(
-                'exam_group' => $e['exam_group_name'],
-                'subjects' => $subjects,
-                'total_max' => $total_max,
-                'total_get' => $has_marks ? $total_get : null,
-                'percentage' => ($has_marks && $total_max > 0) ? round($total_get / $total_max * 100, 1) : null,
-            );
+
+            if (!empty($groups)) {
+                $out[] = array(
+                    'session' => $sess['session_name'] ?: 'Session',
+                    'class' => trim(($sess['class_name'] ?? '') . ' ' . ($sess['section_name'] ?? '')),
+                    'exam_groups' => $groups,
+                );
+            }
         }
-        $this->json(array('status' => 'success', 'exam_groups' => $out));
+        $this->json(array('status' => 'success', 'sessions' => $out));
+    }
+
+    private function grade_for($pct)
+    {
+        if ($pct >= 90) return 'A+';
+        if ($pct >= 80) return 'A';
+        if ($pct >= 70) return 'B';
+        if ($pct >= 60) return 'C';
+        if ($pct >= 50) return 'D';
+        return 'F';
     }
 
     public function dashboard()

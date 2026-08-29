@@ -258,6 +258,79 @@ class Testdata extends CI_Controller
         }
         $out[] = "exam groups + results generated";
 
+        // ---- OLD CLASS demo: a previous session (2024-25) with its own exam results ----
+        // reset any prior run so student_id is correctly set
+        $this->db->query("DELETE egcber FROM exam_group_exam_results egcber
+            JOIN exam_group_class_batch_exam_students egcbes ON egcber.exam_group_class_batch_exam_student_id=egcbes.id
+            JOIN exam_group_class_batch_exams egcbe ON egcbes.exam_group_class_batch_exam_id=egcbe.id
+            WHERE egcbe.exam_group_id=(SELECT id FROM exam_groups WHERE name='Final 2024' LIMIT 1)");
+        $this->db->query("DELETE egcbes FROM exam_group_class_batch_exam_students egcbes
+            JOIN exam_group_class_batch_exams egcbe ON egcbes.exam_group_class_batch_exam_id=egcbe.id
+            WHERE egcbe.exam_group_id=(SELECT id FROM exam_groups WHERE name='Final 2024' LIMIT 1)");
+        $this->db->query("DELETE FROM student_session WHERE session_id=(SELECT id FROM sessions WHERE session='2024-25' LIMIT 1)");
+
+        $old_sess = $this->db->get_where('sessions', array('session' => '2024-25'))->row();
+        if (!$old_sess) {
+            $this->db->insert('sessions', array('session' => '2024-25', 'is_active' => 'no'));
+            $old_sess_id = $this->db->insert_id();
+        } else { $old_sess_id = $old_sess->id; }
+
+        $eg2 = $this->db->get_where('exam_groups', array('name' => 'Final 2024'))->row();
+        if (!$eg2) {
+            $this->db->insert('exam_groups', array('name' => 'Final 2024', 'exam_type' => 'F', 'is_active' => 1));
+            $eg2_id = $this->db->insert_id();
+        } else { $eg2_id = $eg2->id; }
+
+        // one published exam in the old session for Grade 1
+        $row2 = $this->db->get_where('exam_group_class_batch_exams', array('exam_group_id' => $eg2_id, 'exam' => 'Final2024-Grade1'))->row();
+        if (!$row2) {
+            $this->db->insert('exam_group_class_batch_exams', array(
+                'exam' => 'Final2024-Grade1', 'passing_percentage' => 35, 'session_id' => $old_sess_id,
+                'date_from' => '2025-05-01', 'date_to' => '2025-05-10', 'exam_group_id' => $eg2_id, 'is_publish' => 1, 'is_active' => 1));
+            $egcbe2 = $this->db->insert_id();
+        } else { $egcbe2 = $row2->id; }
+
+        // subjects for old exam
+        $subj_ids2 = array_column($this->db->select('id')->get('subjects')->result_array(), 'id');
+        foreach ($subj_ids2 as $sid) {
+            $chk = $this->db->get_where('exam_group_class_batch_exam_subjects', array('exam_group_class_batch_exams_id' => $egcbe2, 'subject_id' => $sid))->row();
+            if (!$chk) $this->db->insert('exam_group_class_batch_exam_subjects', array(
+                'exam_group_class_batch_exams_id' => $egcbe2, 'subject_id' => $sid, 'date_from' => '2025-05-01',
+                'time_from' => '09:00:00', 'duration' => '2', 'max_marks' => 100, 'min_marks' => 35, 'credit_hours' => 1, 'is_active' => 1));
+        }
+
+        // for each existing student_session in Grade 1, create an OLD session student_session + link + results
+        $this->db->select('id, student_id, class_id, section_id'); $this->db->where('class_id', $class_ids['Grade 1']); $this->db->where('is_active', 'yes');
+        $grade1_ss = $this->db->get('student_session')->result();
+        foreach ($grade1_ss as $g1) {
+            // old student_session (is_active=no) for the same student
+            $chk_ss = $this->db->get_where('student_session', array('student_id' => $g1->student_id, 'session_id' => $old_sess_id))->row();
+            if (!$chk_ss) {
+                $this->db->insert('student_session', array('session_id' => $old_sess_id, 'student_id' => $g1->student_id,
+                    'class_id' => $g1->class_id, 'section_id' => $g1->section_id, 'is_active' => 'no'));
+                $old_ss_id = $this->db->insert_id();
+            } else { $old_ss_id = $chk_ss->id; }
+
+            $chk_link = $this->db->get_where('exam_group_class_batch_exam_students', array('exam_group_class_batch_exam_id' => $egcbe2, 'student_session_id' => $old_ss_id))->row();
+            if (!$chk_link) {
+                $max = $this->db->select_max('id')->get('exam_group_class_batch_exam_students')->row()->id;
+                $new_id = ($max ? (int)$max : 0) + 1;
+                $this->db->insert('exam_group_class_batch_exam_students', array('id' => $new_id,
+                    'exam_group_class_batch_exam_id' => $egcbe2, 'student_id' => $g1->student_id,
+                    'student_session_id' => $old_ss_id, 'roll_no' => $old_ss_id, 'is_active' => 1));
+                $egcbest_id = $new_id;
+                $subs = $this->db->get_where('exam_group_class_batch_exam_subjects', array('exam_group_class_batch_exams_id' => $egcbe2))->result();
+                foreach ($subs as $sb) {
+                    $mark = rand(60, 95);
+                    $q = $this->db->insert('exam_group_exam_results', array(
+                        'exam_group_class_batch_exam_student_id' => $egcbest_id,
+                        'exam_group_class_batch_exam_subject_id' => $sb->id, 'attendence' => 'Present', 'get_marks' => $mark, 'is_active' => 1));
+                    if (!$q) { $e=$this->db->error(); $out[]="OLD RESULT FAIL: ".$e['code'].' '.$e['message']; }
+                }
+            }
+        }
+        $out[] = "old-class (2024-25) results generated";
+
         echo implode("<br>\n", $out);
         echo "<br>\nDONE. Test data generated.";
     }

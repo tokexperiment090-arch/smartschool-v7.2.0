@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'riyo_api.dart';
 import 'api_config.dart';
+import 'riyo_theme.dart';
 
 void main() => runApp(const RiyoApp());
 
@@ -9,8 +10,9 @@ class RiyoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Riyo',
-        theme: ThemeData(primarySwatch: Colors.indigo, useMaterial3: true),
+        theme: RiyoTheme.light,
         home: const LoginScreen(),
+        debugShowCheckedModeBanner: false,
       );
 }
 
@@ -52,23 +54,57 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Riyo · Student Login')),
-        body: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Image.asset('assets/riyo_logo.png', height: 64),
-              const SizedBox(height: 16),
-              TextField(controller: _user, decoration: const InputDecoration(labelText: 'Admission No / Username')),
-              TextField(controller: _pass, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
-              const SizedBox(height: 16),
-              if (_err.isNotEmpty) Text(_err, style: const TextStyle(color: Colors.red)),
-              ElevatedButton(
-                onPressed: _busy ? null : _login,
-                child: _busy ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Login'),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [RiyoTheme.brand, RiyoTheme.brandDark],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Image.asset('assets/riyo_logo.png', height: 64),
+                      const SizedBox(height: 8),
+                      const Text('Student / Parent Login',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _user,
+                        decoration: const InputDecoration(labelText: 'Admission No / Username'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _pass,
+                        obscureText: true,
+                        decoration: const InputDecoration(labelText: 'Password'),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_err.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(_err, style: const TextStyle(color: Colors.red)),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _busy ? null : _login,
+                          child: _busy
+                              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('Login'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
+            ),
           ),
         ),
       );
@@ -126,10 +162,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Card(
                     child: ListTile(
-                      title: Text(_dash?['student']?['firstname'] ?? ''),
-                      subtitle: Text(
-                          '${_dash?['student']?['class']} - ${_dash?['student']?['section']}'),
-                      leading: const Icon(Icons.person),
+                      title: Text(_dash?['student']?['firstname'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      subtitle: Text('${_dash?['student']?['class']} - ${_dash?['student']?['section']}'),
+                      leading: const CircleAvatar(
+                        backgroundColor: RiyoTheme.brandLight,
+                        child: Icon(Icons.person, color: RiyoTheme.brand),
+                      ),
                     ),
                   ),
                   _tile(Icons.dashboard, 'Dashboard', () => _push(const DashboardScreen())),
@@ -142,18 +180,46 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
   Widget _tile(IconData icon, String label, VoidCallback onTap) => Card(
-        child: ListTile(leading: Icon(icon), title: Text(label), onTap: onTap),
+        child: ListTile(leading: Icon(icon, color: RiyoTheme.brand), title: Text(label), trailing: const Icon(Icons.chevron_right), onTap: onTap),
       );
 
   void _push(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
 }
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _api = RiyoApi();
+  Map<String, dynamic>? _dash;
+  bool _busy = true;
+  @override
+  void initState() { super.initState(); _api.dashboard().then((r) { _dash = r; if (mounted) setState(() => _busy = false); }); }
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Dashboard')),
-        body: const Center(child: Text('Use the menu items to view exam results, attendance, fees and profile.')),
+        body: _busy
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _stat('Attendance Records', _dash?['attendance_records']?.toString() ?? '0', Icons.check_circle),
+                    const SizedBox(height: 12),
+                    _stat('Class', _dash?['student']?['class'] ?? '-', Icons.class_),
+                    const SizedBox(height: 12),
+                    _stat('Section', _dash?['student']?['section'] ?? '-', Icons.group),
+                    const Spacer(),
+                    const Text('Tip: open Exam Results to see marks by session.', style: TextStyle(color: RiyoTheme.muted)),
+                  ],
+                ),
+              ),
+      );
+  Widget _stat(String label, String value, IconData icon) => Card(
+        child: ListTile(leading: Icon(icon, color: RiyoTheme.brand), title: Text(label), trailing: Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
       );
 }
 
@@ -165,53 +231,108 @@ class ExamResultsScreen extends StatefulWidget {
 
 class _ExamResultsScreenState extends State<ExamResultsScreen> {
   final _api = RiyoApi();
-  List _groups = [];
+  List _sessions = [];
   bool _busy = true;
   @override
-  void initState() { super.initState(); _api.examResults().then((r) { _groups = r['exam_groups'] ?? []; if (mounted) setState(() => _busy = false); }); }
+  void initState() { super.initState(); _api.examResults().then((r) { _sessions = r['sessions'] ?? []; if (mounted) setState(() => _busy = false); }); }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Exam Results')),
         body: _busy
             ? const Center(child: CircularProgressIndicator())
-            : _groups.isEmpty
+            : _sessions.isEmpty
                 ? const Center(child: Text('No published exam results yet.'))
                 : ListView.builder(
-                    itemCount: _groups.length,
-                    itemBuilder: (_, i) {
-                      final g = _groups[i];
-                      final subs = g['subjects'] as List;
-                      return Card(
-                        margin: const EdgeInsets.all(10),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(g['exam_group'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              ...subs.map((s) => ListTile(
-                                    dense: true,
-                                    title: Text(s['subject'] ?? ''),
-                                    trailing: Text('${s['get_marks'] ?? '-'} / ${s['max_marks'] ?? '-'}'),
-                                  )),
-                              const Divider(),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Total', style: TextStyle(fontWeight: FontWeight.w600)),
-                                  Text('${g['total_get'] ?? '-'} / ${g['total_max'] ?? '-'}'),
-                                ],
-                              ),
-                              if (g['percentage'] != null)
-                                Chip(label: Text('${g['percentage']}%')),
-                            ],
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _sessions.length,
+                    itemBuilder: (_, si) {
+                      final sess = _sessions[si];
+                      final groups = sess['exam_groups'] as List;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                            child: Text('${sess['session']}  ·  ${sess['class']}',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: RiyoTheme.brand)),
                           ),
-                        ),
+                          ...groups.map((g) => _examCard(g)).toList(),
+                        ],
                       );
                     },
                   ),
       );
+
+  Widget _examCard(Map g) {
+    final subs = g['subjects'] as List;
+    final pct = g['percentage'];
+    final grade = g['grade'];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(child: Text(g['exam_group'] ?? '', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
+                if (grade != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: RiyoTheme.brand, borderRadius: BorderRadius.circular(8)),
+                    child: Text(grade, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...subs.map((s) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(s['subject'] ?? '')),
+                      Text('${s['get_marks'] ?? '-'} / ${s['max_marks'] ?? '-'}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: (s['get_marks'] != null && s['max_marks'] != null && (s['get_marks'] as num) < (s['max_marks'] as num) * 0.5)
+                                  ? Colors.red
+                                  : RiyoTheme.text)),
+                    ],
+                  ),
+                )),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('${g['total_get'] ?? '-'} / ${g['total_max'] ?? '-'}'),
+              ],
+            ),
+            if (pct != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Percentage', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('$pct%', style: const TextStyle(fontWeight: FontWeight.bold, color: RiyoTheme.brand)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(
+                value: (double.tryParse(pct.toString()) ?? 0) / 100,
+                backgroundColor: RiyoTheme.brandLight,
+                color: RiyoTheme.brand,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AttendanceScreen extends StatefulWidget {
@@ -224,23 +345,79 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   final _api = RiyoApi();
   List _rows = [];
   bool _busy = true;
+  String _month = '';
+
   @override
-  void initState() { super.initState(); _api.attendance().then((r) { _rows = r['attendance'] ?? []; if (mounted) setState(() => _busy = false); }); }
+  void initState() {
+    super.initState();
+    _month = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}';
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _busy = true);
+    try {
+      final r = await _api.attendance(_month);
+      _rows = r['attendance'] ?? [];
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Attendance')),
-        body: _busy
-            ? const Center(child: CircularProgressIndicator())
-            : _rows.isEmpty
-                ? const Center(child: Text('No attendance records yet.'))
-                : ListView.builder(
-                    itemCount: _rows.length,
-                    itemBuilder: (_, i) => ListTile(
-                      title: Text(_rows[i]['date'] ?? ''),
-                      trailing: Chip(label: Text(_rows[i]['status'] ?? _rows[i]['remark'] ?? '')),
-                    ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month, color: RiyoTheme.brand),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: _month,
+                    items: List.generate(12, (i) {
+                      final m = i + 1;
+                      final y = DateTime.now().year;
+                      final val = '$y-${m.toString().padLeft(2, '0')}';
+                      return DropdownMenuItem(value: val, child: Text(_monthLabel(val)));
+                    }),
+                    onChanged: (v) { if (v != null) { _month = v; _load(); } },
                   ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _busy
+                  ? const Center(child: CircularProgressIndicator())
+                  : _rows.isEmpty
+                      ? const Center(child: Text('No attendance records for this month.'))
+                      : ListView.builder(
+                          itemCount: _rows.length,
+                          itemBuilder: (_, i) {
+                            final status = _rows[i]['status'] ?? _rows[i]['remark'] ?? '';
+                            final present = status.toLowerCase().contains('present');
+                            return Card(
+                              child: ListTile(
+                                leading: Icon(present ? Icons.check_circle : Icons.cancel, color: present ? Colors.green : Colors.red),
+                                title: Text(_rows[i]['date'] ?? ''),
+                                trailing: Chip(label: Text(status)),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
       );
+
+  String _monthLabel(String ym) {
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final parts = ym.split('-');
+    return '${names[int.parse(parts[1]) - 1]} ${parts[0]}';
+  }
 }
 
 class FeesScreen extends StatefulWidget {
@@ -271,8 +448,8 @@ class _FeesScreenState extends State<FeesScreen> {
                 ),
               ),
       );
-  Widget _line(String k, String v, {Color? color}) => ListTile(
-        title: Text(k), trailing: Text(v, style: TextStyle(color: color, fontSize: 18)),
+  Widget _line(String k, String v, {Color? color}) => Card(
+        child: ListTile(title: Text(k), trailing: Text(v, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold))),
       );
 }
 
@@ -304,5 +481,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
       );
-  Widget _line(String k, String v) => ListTile(title: Text(k), trailing: Text(v));
+  Widget _line(String k, String v) => Card(child: ListTile(title: Text(k, style: const TextStyle(color: RiyoTheme.muted)), trailing: Text(v, style: const TextStyle(fontWeight: FontWeight.w600))));
 }
