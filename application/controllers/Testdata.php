@@ -121,6 +121,14 @@ class Testdata extends CI_Controller
         $first = array('Ali','Sahra','Hassan','Maryam','Omar','Fadumo','Ibrahim','Halima','Yusuf','Khadra','Ahmed','Ayan','Mustafa','Nadia','Bilan');
         $last  = array('Mohamed','Ali','Nur','Said','Omar','Hassan','Ahmed','Farah','Abdullahi','Ismail');
         $cur = $this->db->count_all('students');
+        // Clean-slate the RYY demo accounts so student_session.student_id is always correct.
+        $rrows = $this->db->query("SELECT id FROM students WHERE admission_no LIKE 'RYY%'")->result();
+        foreach ($rrows as $r) {
+            $this->db->query("DELETE FROM student_session WHERE student_id=".(int)$r->id);
+            $this->db->query("DELETE FROM users WHERE user_id=".(int)$r->id);
+            $this->db->query("DELETE FROM students WHERE id=".(int)$r->id);
+        }
+        $cur = 0;
         if ($cur < 5) {
             $n = 0;
             foreach ($cs_map as $cs => $csrow) {
@@ -187,6 +195,68 @@ class Testdata extends CI_Controller
             if (!$fm) { $this->db->insert('feemasters', array('session_id'=>$sess_id,'feetype_id'=>$ftid,'class_id'=>$c,'amount'=>150,'is_active'=>'yes')); $out[]="feemaster for class $c"; }
         }
         $out[] = "fee masters created";
+
+        // ---- exam groups + results (exam_group_* schema) ----
+        $eg = $this->db->get_where('exam_groups', array('name' => 'Mid Term 2025'))->row();
+        if (!$eg) {
+            $this->db->insert('exam_groups', array('name'=>'Mid Term 2025','exam_type'=>'UT','is_active'=>1));
+            $eg_id = $this->db->insert_id(); $out[] = "exam_group Mid Term 2025 (id $eg_id)";
+        } else { $eg_id = $eg->id; }
+
+        // one published exam per class so every student has a result
+        foreach ($class_ids as $cid) {
+            $row = $this->db->get_where('exam_group_class_batch_exams', array('exam_group_id'=>$eg_id,'exam'=>('MidTerm-'.$cid)))->row();
+            if (!$row) {
+                $this->db->insert('exam_group_class_batch_exams', array(
+                    'exam'=>('MidTerm-'.$cid),'passing_percentage'=>35,'session_id'=>$sess_id,
+                    'date_from'=>date('Y-m-d'),'date_to'=>date('Y-m-d', strtotime('+7 days')),
+                    'exam_group_id'=>$eg_id,'is_publish'=>1,'is_active'=>1));
+                $egcbe_id = $this->db->insert_id();
+            } else { $egcbe_id = $row->id; }
+
+            // subjects for this exam
+            $subj_ids = $this->db->select('id')->get('subjects')->result_array();
+            $subj_ids = array_column($subj_ids, 'id');
+            $subj_link = array();
+            foreach ($subj_ids as $sid) {
+                $chk = $this->db->get_where('exam_group_class_batch_exam_subjects', array('exam_group_class_batch_exams_id'=>$egcbe_id,'subject_id'=>$sid))->row();
+                if (!$chk) {
+                    $this->db->insert('exam_group_class_batch_exam_subjects', array(
+                        'exam_group_class_batch_exams_id'=>$egcbe_id,'subject_id'=>$sid,
+                        'date_from'=>date('Y-m-d'),'time_from'=>'09:00:00','duration'=>'2','max_marks'=>100,'min_marks'=>35,'credit_hours'=>1,'is_active'=>1));
+                    $subj_link[$sid] = $this->db->insert_id();
+                } else { $subj_link[$sid] = $chk->id; }
+            }
+
+            // link every student_session of this class to the exam
+            $this->db->select('id, student_id'); $this->db->where('class_id', $cid); $this->db->where('is_active','yes');
+            $ss_list = $this->db->get('student_session')->result();
+            foreach ($ss_list as $ssr) {
+                $chk = $this->db->get_where('exam_group_class_batch_exam_students', array('exam_group_class_batch_exam_id'=>$egcbe_id,'student_session_id'=>$ssr->id))->row();
+                if (!$chk) {
+                    $max = $this->db->select_max('id')->get('exam_group_class_batch_exam_students')->row()->id;
+                    $new_id = ($max ? (int)$max : 0) + 1;
+                    $this->db->insert('exam_group_class_batch_exam_students', array(
+                        'id'=>$new_id,
+                        'exam_group_class_batch_exam_id'=>$egcbe_id,'student_id'=>$ssr->student_id,
+                        'student_session_id'=>$ssr->id,'roll_no'=>$ssr->id,'is_active'=>1));
+                    $e = $this->db->error();
+                    if ($this->db->affected_rows() == 0 || $e['code'] != 0) { $out[]="EXAMSTUD FAIL: ".$e['code'].' '.$e['message']; }
+                    else { $out[]="EGCBES ok stu=".$ssr->student_id." ss=".$ssr->id." id=".$new_id; }
+                    $egcbest_id = $new_id;
+                    // insert a result row per subject
+                    foreach ($subj_link as $sid => $link_id) {
+                        $mark = rand(55, 98);
+                        $q = $this->db->insert('exam_group_exam_results', array(
+                            'exam_group_class_batch_exam_student_id'=>$egcbest_id,
+                            'exam_group_class_batch_exam_subject_id'=>$link_id,
+                            'attendence'=>'Present','get_marks'=>$mark,'is_active'=>1));
+                        if (!$q) { $e=$this->db->error(); $out[]="RESULT FAIL: ".$e['code'].' '.$e['message']; }
+                    }
+                }
+            }
+        }
+        $out[] = "exam groups + results generated";
 
         echo implode("<br>\n", $out);
         echo "<br>\nDONE. Test data generated.";
