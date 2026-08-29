@@ -51,16 +51,22 @@ class Language extends Admin_Controller
         $id              = $session['id'];
         $data['lang_id'] = $lang_id;
         $this->language_model->set_userlang($id, $data);
-        $setting_result = $this->setting_model->get();
         $setting        = $this->staff_model->get($id);
-        //================
-        $this->session->userdata['admin']['language'] = ['lang_id' => $setting['lang_id'], 'lang_short_code' => $setting['short_code'],'language' => $setting['language']];
-
+        if (!$setting) { return; }
+        // Rebuild the whole admin session array and persist it (direct array
+        // assignment on userdata does NOT write to the session store).
+        $admin = $this->session->userdata('admin');
+        $admin['language'] = array(
+            'lang_id'         => $setting['lang_id'],
+            'lang_short_code' => $setting['short_code'],
+            'language'        => $setting['language'],
+        );
         if ($setting['is_rtl'] == 1) {
-            $this->session->userdata['admin']['is_rtl'] = 'enabled';
+            $admin['is_rtl'] = 'enabled';
         } else {
-            $this->session->userdata['admin']['is_rtl'] = 'disabled';
+            $admin['is_rtl'] = 'disabled';
         }
+        $this->session->set_userdata('admin', $admin);
     }
 
     public function view($id)
