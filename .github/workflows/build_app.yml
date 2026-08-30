@@ -51,6 +51,9 @@ jobs:
           rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
           ls -la
 
+      - name: Patch Android permissions (INTERNET, cleartext, network state)
+        run: python3 tool/patch_perms.py android
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -103,6 +106,9 @@ jobs:
           rm -rf lib && mv /tmp/_lib ./lib
           rm -rf assets && mv /tmp/_assets ./assets
           rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
+
+      - name: Patch iOS Info.plist (App Transport Security)
+        run: python3 tool/patch_perms.py ios
 
       - name: Install dependencies
         run: flutter pub get
