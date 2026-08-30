@@ -111,7 +111,8 @@ class RiyoApi {
       if (decoded is! Map) {
         throw const FormatException('Expected a JSON object.');
       }
-      body = decoded;
+      // jsonDecode returns Map<dynamic, dynamic>; cast to Map<String, dynamic>.
+      body = Map<String, dynamic>.from(decoded);
     } on FormatException {
       throw ApiException(
         ApiError.invalidResponse,
