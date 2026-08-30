@@ -13,8 +13,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-verify:
-    name: Build Flutter (Android + iOS)
+  # Android APK — runs on Linux (fast, no Xcode needed).
+  build-android:
+    name: Build Android APK
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,6 +33,24 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
+      # The repo ships lib/, assets/, pubspec.yaml only (no android/).
+      # Generate android/ with the SAME Flutter version to avoid Gradle/AGP mismatches,
+      # then restore our lib/assets/pubspec.
+      - name: Stash app sources
+        run: |
+          mv lib /tmp/_lib && mv assets /tmp/_assets && mv pubspec.yaml /tmp/_pubspec.yaml || true
+          ls -la
+
+      - name: Generate Android project
+        run: flutter create --platforms=android --org=com.riyo --project-name=riyo_app .
+
+      - name: Restore app sources
+        run: |
+          rm -rf lib && mv /tmp/_lib ./lib
+          rm -rf assets && mv /tmp/_assets ./assets
+          rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
+          ls -la
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -42,15 +61,57 @@ jobs:
       - name: Build APK (release)
         run: flutter build apk --release
 
-      - name: Build iOS (release, no codesign)
-        run: flutter build ios --release --no-codesign
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: riyo-app-release-apk
           path: riyo_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+  # iOS — requires macOS + Xcode. Builds the unsigned .app (no-codesign).
+  build-ios:
+    name: Build iOS (unsigned)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: riyo_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Setup CocoaPods
+        run: sudo gem install cocoapods --no-document || pod --version
+
+      - name: Stash app sources
+        run: |
+          mv lib /tmp/_lib && mv assets /tmp/_assets && mv pubspec.yaml /tmp/_pubspec.yaml || true
+
+      - name: Generate iOS project
+        run: flutter create --platforms=ios --org=com.riyo --project-name=riyo_app .
+
+      - name: Restore app sources
+        run: |
+          rm -rf lib && mv /tmp/_lib ./lib
+          rm -rf assets && mv /tmp/_assets ./assets
+          rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Install iOS pods
+        run: cd ios && pod install && cd ..
+
+      - name: Build iOS (release, no codesign)
+        run: flutter build ios --release --no-codesign
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
