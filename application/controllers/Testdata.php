@@ -29,6 +29,11 @@ class Testdata extends CI_Controller
             $sess_id = $this->db->insert_id(); $out[] = "created session 2025-26 (id $sess_id)";
         } else { $sess_id = $sess->id; $out[] = "using session id $sess_id"; }
 
+        // Make the web "current session" match the session our test students live in,
+        // otherwise the Student panel shows "No More Classes Found In Your Current Session".
+        $this->db->query("UPDATE sch_settings SET session_id=".(int)$sess_id." WHERE id=1");
+        $out[] = "sch_settings.session_id set to $sess_id";
+
         // ---- classes ----
         $classes = array('Grade 1','Grade 2','Grade 3');
         $class_ids = array();

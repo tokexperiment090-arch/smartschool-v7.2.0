@@ -184,12 +184,21 @@ class Riyo_api extends CI_Controller
     {
         $uid = $this->auth();
         if (!$uid) return $this->json(array('status' => 'error', 'message' => 'unauthorized'), 401);
-        $this->db->select('title, message, date');
-        $this->db->where('visible_student', 'yes');
-        $this->db->order_by('date', 'DESC');
+        $this->db->select('title, message, publish_date, date');
+        $this->db->from('send_notification');
+        $this->db->where("visible_student IN ('Yes','yes','YES','1','true')", null, false);
+        $this->db->order_by('publish_date', 'DESC');
         $this->db->limit(20);
-        $rows = $this->db->get('notices')->result_array();
-        $this->json(array('status' => 'success', 'notices' => $rows));
+        $rows = $this->db->get()->result_array();
+        $out = array();
+        foreach ($rows as $r) {
+            $out[] = array(
+                'title' => $r['title'],
+                'message' => $r['message'],
+                'date' => $r['publish_date'] ?: $r['date'],
+            );
+        }
+        $this->json(array('status' => 'success', 'notices' => $out));
     }
 
     public function examresults()
