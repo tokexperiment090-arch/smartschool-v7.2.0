@@ -33,24 +33,37 @@ class RiyoApi {
 
   // ---- cookie management ----
 
-  /// Parse `Set-Cookie` headers (possibly multiple, comma-separated) and add
-  /// the cookie name=value pairs to [_cookieJar].
+  /// Parse `Set-Cookie` header(s) and add cookie name=value pairs to
+  /// [_cookieJar]. Handles both a single comma-joined `Set-Cookie` string
+  /// (the default `http` package behaviour) and multiple separate
+  /// `Set-Cookie` headers (when the underlying client preserves them).
   void _absorbCookies(http.Response r) {
-    // dart:io http.Response may expose getAll('set-cookie').
-    final raw = r.headersAll['set-cookie'] ?? const <String>[];
-    for (final sc in raw) {
-      for (final part in sc.split(',')) {
-        final seg = part.trim();
-        if (seg.isEmpty || !seg.contains('=')) continue;
-        final name = seg.substring(0, seg.indexOf('='));
-        var value = seg.substring(seg.indexOf('=') + 1);
-        // strip attributes like ; Path=/; HttpOnly
-        final semi = value.indexOf(';');
-        if (semi >= 0) value = value.substring(0, semi);
-        value = value.trim();
-        if (name.isEmpty) continue;
-        _cookieJar[name] = value;
-      }
+    final headerValue = r.headers['set-cookie'];
+    if (headerValue == null || headerValue.isEmpty) return;
+
+    // The `http` package concatenates multiple Set-Cookie headers into a
+    // single comma-separated string. Each Set-Cookie entry itself uses
+    // `;` as an attribute separator (e.g. `Path=/;HttpOnly`), so a plain
+    // `split(',')` followed by a name=value sanity check is sufficient
+    // for the cookies the InfinityFree challenge sets.
+    final entries = <String>[];
+    for (final raw in headerValue.split(',')) {
+      final seg = raw.trim();
+      if (seg.isEmpty) continue;
+      // Only treat as a cookie line if it starts with `name=`.
+      if (!RegExp(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+=").hasMatch(seg)) continue;
+      entries.add(seg);
+    }
+
+    for (final seg in entries) {
+      final eq = seg.indexOf('=');
+      if (eq <= 0) continue;
+      final name = seg.substring(0, eq).trim();
+      var value = seg.substring(eq + 1).trim();
+      final semi = value.indexOf(';');
+      if (semi >= 0) value = value.substring(0, semi).trim();
+      if (name.isEmpty) continue;
+      _cookieJar[name] = value;
     }
   }
 
