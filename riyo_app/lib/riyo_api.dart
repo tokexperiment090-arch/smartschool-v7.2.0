@@ -15,6 +15,16 @@ class RiyoApi {
   final _storage = const FlutterSecureStorage();
   UnauthorizedHandler? _onUnauthorized;
 
+  /// Test-only override: when set, [RiyoApi.instance] returns this instead of
+  /// constructing a default client. Never set this in production code.
+  static RiyoApi? _testOverride;
+  static void setTestOverride(RiyoApi? api) => _testOverride = api;
+
+  /// Singleton accessor used by the global `api` reference in main.dart.
+  /// In production this is just `RiyoApi()`. Tests can call
+  /// [setTestOverride] to inject a fake.
+  static RiyoApi get instance => _testOverride ?? RiyoApi();
+
   // Shared HTTP client so cookies set by the warmup carry into API calls.
   // Without a persistent client, dart:io HttpClient would not send cookies
   // returned in Set-Cookie on the first response.

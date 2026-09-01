@@ -7,7 +7,7 @@ import 'state_widgets.dart';
 // Single shared API client. The 401 handler is set after MaterialApp is built
 // (see [_RiyoAppState]) so the navigator is available to pop to the login
 // screen when the token expires or the server rejects the session.
-final RiyoApi api = RiyoApi();
+final RiyoApi api = RiyoApi.instance;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
