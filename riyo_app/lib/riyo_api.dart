@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show SocketException, HttpException;
+import 'dart:io' show SocketException, HttpException, Cookie;
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_config.dart';
 
@@ -16,7 +15,13 @@ class RiyoApi {
   final _storage = const FlutterSecureStorage();
   UnauthorizedHandler? _onUnauthorized;
 
-  /// Allow screens to set a global 401 handler (e.g. set after MaterialApp is built).
+  // Shared HTTP client so cookies set by the warmup carry into API calls.
+  // Without a persistent client, dart:io HttpClient would not send cookies
+  // returned in Set-Cookie on the first response.
+  final http.Client _client = http.Client();
+  final Map<String, String> _cookieJar = {}; // cookie name -> value
+  bool _warmed = false;
+
   void setUnauthorizedHandler(UnauthorizedHandler h) => _onUnauthorized = h;
 
   // ---- token storage ----
@@ -26,27 +31,61 @@ class RiyoApi {
     await _storage.delete(key: ApiConfig.TOKEN_KEY);
   }
 
+  // ---- cookie management ----
+
+  /// Parse `Set-Cookie` headers (possibly multiple, comma-separated) and add
+  /// the cookie name=value pairs to [_cookieJar].
+  void _absorbCookies(http.Response r) {
+    // dart:io http.Response may expose getAll('set-cookie').
+    final raw = r.headersAll['set-cookie'] ?? const <String>[];
+    for (final sc in raw) {
+      for (final part in sc.split(',')) {
+        final seg = part.trim();
+        if (seg.isEmpty || !seg.contains('=')) continue;
+        final name = seg.substring(0, seg.indexOf('='));
+        var value = seg.substring(seg.indexOf('=') + 1);
+        // strip attributes like ; Path=/; HttpOnly
+        final semi = value.indexOf(';');
+        if (semi >= 0) value = value.substring(0, semi);
+        value = value.trim();
+        if (name.isEmpty) continue;
+        _cookieJar[name] = value;
+      }
+    }
+  }
+
+  /// Build the Cookie request header from the jar.
+  String? _cookieHeader() {
+    if (_cookieJar.isEmpty) return null;
+    return _cookieJar.entries.map((e) => '${e.key}=${e.value}').join('; ');
+  }
+
   // ---- low-level request ----
 
-  /// Standard headers for every request. A real browser User-Agent bypasses the
-  /// InfinityFree free-host JS-challenge for most calls, so we always send it.
-  Map<String, String> _commonHeaders() => {
-        'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-      };
+  /// Browser-like headers that make InfinityFree's free-host JS-challenge
+  /// accept the request as browser traffic.
+  Map<String, String> _commonHeaders() {
+    final h = <String, String>{
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+    final ck = _cookieHeader();
+    if (ck != null) h['Cookie'] = ck;
+    return h;
+  }
 
   /// True when a response body looks like JSON we can parse.
   bool _isJsonResponse(http.Response r) {
     final ct = (r.headers['content-type'] ?? '').toLowerCase();
     if (ct.contains('application/json')) return true;
-    // If the body starts with '{' or '[' we treat it as JSON.
     final s = r.body.trimLeft();
     return s.startsWith('{') || s.startsWith('[');
   }
 
-  /// Core request with timeout, retry-once on transient network errors, and
-  /// typed exception translation. Throws [ApiException] on any failure.
+  /// Core request with timeout, retry on transient + challenge errors, cookie
+  /// persistence, and typed exception translation. Throws [ApiException].
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -56,19 +95,24 @@ class RiyoApi {
     final uri = Uri.parse('${ApiConfig.BASE_URL}$path').replace(queryParameters: query);
 
     ApiException? lastError;
-    for (var attempt = 0; attempt <= ApiConfig.MAX_RETRIES; attempt++) {
+    // Allow one extra retry so the challenge-recovery path (re-warmup) gets
+    // a chance to fix the next attempt.
+    final maxRetries = ApiConfig.MAX_RETRIES + 1;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        final headers = {
+          ..._commonHeaders(),
+          if (body != null) 'Content-Type': 'application/x-www-form-urlencoded',
+        };
         late http.Response r;
-        final headers = {..._commonHeaders(), if (body != null) 'Content-Type': 'application/x-www-form-urlencoded'};
         if (method == 'GET') {
-          r = await http
-              .get(uri, headers: headers)
-              .timeout(ApiConfig.READ_TIMEOUT);
+          r = await _client.get(uri, headers: headers).timeout(ApiConfig.READ_TIMEOUT);
         } else {
-          r = await http
+          r = await _client
               .post(uri, headers: headers, body: body ?? {})
               .timeout(ApiConfig.READ_TIMEOUT);
         }
+        _absorbCookies(r);
         return _parse(r);
       } on TimeoutException {
         lastError = const ApiException(ApiError.timeout, 'The server is taking too long to respond.');
@@ -79,15 +123,19 @@ class RiyoApi {
       } on http.ClientException catch (e) {
         lastError = ApiException(ApiError.noNetwork, e.message);
       } on FormatException {
-        // The server returned something we can't parse as JSON — could be the
-        // InfinityFree HTML challenge or an unhandled error page.
         lastError = const ApiException(
             ApiError.invalidResponse, 'The server response was not valid JSON.');
       } catch (e) {
         lastError = ApiException(ApiError.unknown, e.toString());
       }
-      // brief backoff before retry
-      if (attempt < ApiConfig.MAX_RETRIES) {
+
+      // On challenge (invalidResponse), re-warmup before retrying so the
+      // server can set any required cookies.
+      if (lastError?.code == ApiError.invalidResponse || lastError?.code == ApiError.unknown) {
+        try {
+          await _warmup();
+        } catch (_) {}
+      } else if (attempt < maxRetries) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
       }
     }
@@ -98,7 +146,6 @@ class RiyoApi {
   /// into typed [ApiException]s.
   Map<String, dynamic> _parse(http.Response r) {
     if (!_isJsonResponse(r)) {
-      // Likely the InfinityFree HTML JS-challenge or an error page.
       throw ApiException(
         ApiError.invalidResponse,
         'Unexpected response (HTTP ${r.statusCode}).',
@@ -111,7 +158,6 @@ class RiyoApi {
       if (decoded is! Map) {
         throw const FormatException('Expected a JSON object.');
       }
-      // jsonDecode returns Map<dynamic, dynamic>; cast to Map<String, dynamic>.
       body = Map<String, dynamic>.from(decoded);
     } on FormatException {
       throw ApiException(
@@ -124,7 +170,6 @@ class RiyoApi {
     if (body['status'] == 'error') {
       final msg = (body['message'] ?? 'Request failed').toString();
       final code = _mapHttpAndMessage(r.statusCode, msg);
-      // 401 / 403-unauthorized: clear token + fire global handler.
       if (code == ApiError.unauthorized) {
         clearToken();
         _onUnauthorized?.call();
@@ -152,30 +197,33 @@ class RiyoApi {
     return _mapHttp(s);
   }
 
-  // ---- warm-up: hit the homepage once to clear InfinityFree's JS challenge ----
+  // ---- warm-up ----
 
-  /// Loads the site root in a real browser context so the JS-challenge cookie
-  /// is set. After this, subsequent JSON API calls go through normally even
-  /// on the free InfinityFree host.
-  ///
-  /// [http.Client] is used so callers can share a cookie/UA surface. This is
-  /// safe to call multiple times.
-  Future<void> warmup({http.Client? client}) async {
-    final c = client ?? http.Client();
+  /// Hit the site root with browser-like headers. Any Set-Cookie headers are
+  /// captured into [_cookieJar] so subsequent API calls carry them.
+  Future<void> _warmup() async {
     try {
-      await c
+      final r = await _client
           .get(Uri.parse('${ApiConfig.BASE_URL}/'), headers: _commonHeaders())
           .timeout(ApiConfig.CONNECT_TIMEOUT);
+      _absorbCookies(r);
     } catch (_) {
-      // warmup is best-effort; ignore failures.
-    } finally {
-      if (client == null) c.close();
+      // warmup is best-effort
     }
+  }
+
+  /// Public warmup. Safe to call multiple times.
+  Future<void> warmup() async {
+    _warmed = true;
+    await _warmup();
   }
 
   // ---- public endpoints ----
 
   Future<Map<String, dynamic>> login(String username, String password) async {
+    // The InfinityFree JS challenge on the login POST is the most common
+    // failure point — warm up again right before login so cookies are fresh.
+    if (!_warmed) await _warmup();
     final body = await _request('POST', '/riyo_api/login', body: {
       'username': username,
       'password': password,
@@ -184,8 +232,7 @@ class RiyoApi {
     return body;
   }
 
-  Future<Map<String, dynamic>> profile() async =>
-      _get('/riyo_api/profile');
+  Future<Map<String, dynamic>> profile() async => _get('/riyo_api/profile');
   Future<Map<String, dynamic>> attendance([String? month]) async =>
       _get('/riyo_api/attendance', query: month != null ? {'month': month} : null);
   Future<Map<String, dynamic>> fees() async => _get('/riyo_api/fees');
@@ -202,6 +249,6 @@ class RiyoApi {
     return _request('GET', path, query: q);
   }
 
-  // For diagnostics / "ping" UI.
+  /// Diagnostics: hit the setup endpoint and return whatever JSON it returns.
   Future<Map<String, dynamic>> setup() async => _request('GET', '/riyo_api/setup');
 }
