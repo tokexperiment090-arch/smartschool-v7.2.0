@@ -13,15 +13,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Android APK — runs on Linux (fast, no Xcode needed).
+  # ============================================================
+  # Android APK — Linux runner (fast, no Xcode needed)
+  # ============================================================
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: riyo_app
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -34,11 +38,13 @@ jobs:
         run: flutter --version
 
       # The repo ships lib/, assets/, pubspec.yaml only (no android/).
-      # Generate android/ with the SAME Flutter version to avoid Gradle/AGP mismatches,
-      # then restore our lib/assets/pubspec.
+      # Generate android/ with the SAME Flutter version to avoid Gradle/AGP mismatches.
       - name: Stash app sources
         run: |
-          mv lib /tmp/_lib && mv assets /tmp/_assets && mv pubspec.yaml /tmp/_pubspec.yaml && mv l10n.yaml /tmp/_l10n.yaml || true
+          mv lib /tmp/_lib
+          mv assets /tmp/_assets
+          mv pubspec.yaml /tmp/_pubspec.yaml
+          [ -f l10n.yaml ] && mv l10n.yaml /tmp/_l10n.yaml || true
           ls -la
 
       - name: Generate Android project
@@ -49,15 +55,15 @@ jobs:
           rm -rf lib && mv /tmp/_lib ./lib
           rm -rf assets && mv /tmp/_assets ./assets
           rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
-          rm -f l10n.yaml && mv /tmp/_l10n.yaml ./l10n.yaml || true
+          [ -f /tmp/_l10n.yaml ] && mv /tmp/_l10n.yaml ./l10n.yaml || true
           ls -la
 
-      - name: Remove generated test/ and README.md (we have our own; the default test references a non-existent MyApp)
+      - name: Remove generated test/ and README.md
         run: |
           rm -rf test README.md || true
           ls -la
 
-      - name: Patch Android permissions (INTERNET, cleartext, network state)
+      - name: Patch Android permissions
         run: python3 tool/patch_perms.py android || true
 
       - name: Install dependencies
@@ -67,27 +73,37 @@ jobs:
         run: flutter analyze
         continue-on-error: true
 
+      # IMPORTANT: set -o pipefail ensures flutter's exit code is not swallowed by tee
       - name: Build APK (release)
+        shell: bash
         run: |
+          set -o pipefail
           mkdir -p build
           flutter build apk --release 2>&1 | tee build/android-build.log
 
-      - name: Debug APK paths
+      - name: Verify APK exists
         if: success()
+        shell: bash
         run: |
-          echo "=== Debug APK paths from repo root ==="
-          find riyo_app/build -name "*.apk" -type f 2>/dev/null || echo "No APKs found"
+          echo "=== Searching for APK files ==="
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "❌ Expected APK not found at: $APK_PATH"
+            echo "=== Contents of build/ ==="
+            find build -type f 2>/dev/null | head -50 || echo "build/ is empty"
+            exit 1
+          fi
+          echo "✅ APK found at: $APK_PATH"
+          ls -la build/app/outputs/flutter-apk/
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: riyo-app-release-apk
-          path: |
-            riyo_app/build/app/outputs/flutter-apk/*.apk
-            riyo_app/build/app/outputs/flutter-apk/**/*.apk
-            riyo_app/build/app/outputs/**/*.apk
-            riyo_app/build/**/*.apk
+          path: riyo_app/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+          retention-days: 30
 
       - name: Upload build logs on failure
         if: failure()
@@ -95,19 +111,23 @@ jobs:
         with:
           name: android-build-logs
           path: |
+            riyo_app/build/android-build.log
             riyo_app/build/**/*.log
-            riyo_app/android/**/*.log
-            riyo_app/.dart_tool/**/*.log
+          if-no-files-found: warn
 
-  # iOS — requires macOS + Xcode. Builds the unsigned .app (no-codesign).
+  # ============================================================
+  # iOS — macOS runner (required for Xcode). Unsigned .app build.
+  # ============================================================
   build-ios:
     name: Build iOS (unsigned)
     runs-on: macos-latest
     defaults:
       run:
         working-directory: riyo_app
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -124,7 +144,11 @@ jobs:
 
       - name: Stash app sources
         run: |
-          mv lib /tmp/_lib && mv assets /tmp/_assets && mv pubspec.yaml /tmp/_pubspec.yaml && mv l10n.yaml /tmp/_l10n.yaml || true
+          mv lib /tmp/_lib
+          mv assets /tmp/_assets
+          mv pubspec.yaml /tmp/_pubspec.yaml
+          [ -f l10n.yaml ] && mv l10n.yaml /tmp/_l10n.yaml || true
+          ls -la
 
       - name: Generate iOS project
         run: flutter create --platforms=ios --org=com.riyo --project-name=riyo_app .
@@ -134,37 +158,53 @@ jobs:
           rm -rf lib && mv /tmp/_lib ./lib
           rm -rf assets && mv /tmp/_assets ./assets
           rm -f pubspec.yaml && mv /tmp/_pubspec.yaml ./pubspec.yaml
-          rm -f l10n.yaml && mv /tmp/_l10n.yaml ./l10n.yaml || true
+          [ -f /tmp/_l10n.yaml ] && mv /tmp/_l10n.yaml ./l10n.yaml || true
+          ls -la
 
       - name: Remove generated test/ and README.md
         run: rm -rf test README.md || true
 
-      - name: Patch iOS Info.plist (App Transport Security)
+      - name: Patch iOS Info.plist
         run: python3 tool/patch_perms.py ios || true
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Install iOS pods
-        run: cd ios && pod install && cd ..
+        run: |
+          cd ios
+          pod install
+          cd ..
 
       - name: Build iOS (release, no codesign)
+        shell: bash
         run: |
+          set -o pipefail
           mkdir -p build
           flutter build ios --release --no-codesign 2>&1 | tee build/ios-build.log
 
-      - name: List iOS outputs (debug)
+      - name: Verify iOS .app exists
         if: success()
+        shell: bash
         run: |
-          echo "=== build/ios ==="
-          find riyo_app/build/ios -type f -name "*.app" 2>/dev/null || echo "No .app found"
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ Expected .app not found at: $APP_PATH"
+            echo "=== Contents of build/ios ==="
+            find build/ios -type d 2>/dev/null | head -30 || echo "build/ios is empty"
+            exit 1
+          fi
+          echo "✅ iOS .app found at: $APP_PATH"
+          ls -la build/ios/iphoneos/
 
       - name: Upload iOS artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: riyo-app-release-ios
           path: riyo_app/build/ios/iphoneos/Runner.app
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload build logs on failure
         if: failure()
@@ -172,6 +212,6 @@ jobs:
         with:
           name: ios-build-logs
           path: |
+            riyo_app/build/ios-build.log
             riyo_app/build/**/*.log
-            riyo_app/ios/**/*.log
-            riyo_app/.dart_tool/**/*.log
+          if-no-files-found: warn
